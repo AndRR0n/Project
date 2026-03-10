@@ -1,5 +1,7 @@
 import asyncio
 import sqlite3
+import os
+
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F, types
@@ -200,4 +202,5 @@ async def main():
 
 
 if __name__ == "__main__":
+
     asyncio.run(main())
