@@ -1,0 +1,15 @@
+.status-работает    { background: #e8ffe8; }
+.status-впроработке { background: #fff3cd; }
+.status-закрыта     { background: #ffecec; }
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  text-align: left;
+}
+th { background: #f4f4f4; }
+button { margin: 0 4px; padding: 4px 8px; }

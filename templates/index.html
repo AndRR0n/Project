@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Точки продаж</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    .status-работает    { background: #e8ffe8; }
+    .status-впроработке { background: #fff3cd; }
+    .status-закрыта     { background: #ffecec; }
+    .status-неработает  { background: #ffecec; }
+    input, select { width: 100%; box-sizing: border-box; padding: 4px; }
+    button { padding: 4px 8px; margin: 2px; cursor: pointer; }
+    .add-form { margin: 20px 0; padding: 12px; border: 1px solid #ccc; background: #f9f9f9; }
+    .add-form input, .add-form select, .add-form textarea { margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+<h1>Точки продаж</h1>
+
+<!-- Форма добавления -->
+<div class="add-form">
+  <h3>Добавить новую точку</h3>
+  <input type="text" id="new-name"     placeholder="Название точки" required>
+  <input type="text" id="new-address"  placeholder="Адрес">
+  <input type="tel"  id="new-phone"    placeholder="Номер телефона (+7 ... или 8...)">
+  <select id="new-status">
+    <option value="в проработке">в проработке</option>
+    <option value="работает">работает</option>
+    <option value="закрыта">закрыта</option>
+    <option value="не работает">не работает</option>
+  </select>
+  <textarea id="new-comment" placeholder="Комментарий / заметки" rows="2"></textarea>
+  <button onclick="addPoint()">Добавить</button>
+</div>
+
+<!-- Таблица -->
+<table id="points-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Название</th>
+      <th>Адрес</th>
+      <th>Телефон</th>              <!-- ← новая колонка -->
+      <th>Статус</th>
+      <th>Комментарий</th>
+      <th>Обновлено</th>
+      <th>Кем</th>
+      <th>Действия</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for p in points %}
+    <tr data-id="{{ p.id }}" class="status-{{ p.status | replace(' ', '') }}">
+      <td>{{ p.id }}</td>
+      <td><input type="text" value="{{ p.name }}"     onchange="updateField({{ p.id }}, 'name',    this.value)"></td>
+      <td><input type="text" value="{{ p.address }}"  onchange="updateField({{ p.id }}, 'address', this.value)"></td>
+      <td><input type="tel"  value="{{ p.phone or '' }}" onchange="updateField({{ p.id }}, 'phone',   this.value)"></td>
+      <td>
+        <select onchange="updateField({{ p.id }}, 'status', this.value)">
+          <option value="работает"     {% if p.status == 'работает'     %}selected{% endif %}>работает</option>
+          <option value="в проработке" {% if p.status == 'в проработке' %}selected{% endif %}>в проработке</option>
+          <option value="закрыта"      {% if p.status == 'закрыта'      %}selected{% endif %}>закрыта</option>
+          <option value="не работает"  {% if p.status == 'не работает'  %}selected{% endif %}>не работает</option>
+        </select>
+      </td>
+      <td><textarea rows="1" onchange="updateField({{ p.id }}, 'comment', this.value)">{{ p.comment or '' }}</textarea></td>
+      <td>{{ p.updated }}</td>
+      <td>{{ p.updated_by }}</td>
+      <td>
+        <button onclick="deletePoint({{ p.id }})" style="background:#ff4d4d; color:white; border:none; padding:4px 8px; cursor:pointer;">
+          Удалить
+        </button>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<script>
+  async function updateField(id, field, value) {
+    if (value === undefined || value === null) return;
+
+    const res = await fetch("/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, field, value })
+    });
+
+    if (!res.ok) {
+      alert("Ошибка сохранения");
+      console.error(await res.text());
+    }
+    // можно добавить визуальную индикацию успеха, если нужно
+  }
+
+  async function addPoint() {
+  const name    = document.getElementById("new-name").value.trim();
+  const address = document.getElementById("new-address").value.trim();
+  const phone   = document.getElementById("new-phone").value.trim();     // ← добавили
+  const status  = document.getElementById("new-status").value;
+  const comment = document.getElementById("new-comment").value.trim();
+
+  if (!name) {
+    alert("Введите хотя бы название точки");
+    return;
+  }
+
+  const res = await fetch("/add", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, address, phone, status, comment })      // ← добавили phone
+  });
+
+  if (res.ok) {
+    location.reload();
+  } else {
+    alert("Ошибка добавления");
+  }
+}
+  
+  async function deletePoint(id) {
+  if (!confirm(`Удалить точку #${id} без возможности восстановления?`)) {
+    return;
+  }
+
+  const res = await fetch("/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+
+  if (res.ok) {
+    // Удаляем строку из DOM без перезагрузки страницы
+    const row = document.querySelector(`tr[data-id="${id}"]`);
+    if (row) {
+      row.remove();
+    }
+    // Можно добавить уведомление, например:
+    // alert("Точка удалена");
+  } else {
+    alert("Ошибка удаления");
+    console.error(await res.text());
+  }
+}
+</script>
+
+</body>
+</html>
