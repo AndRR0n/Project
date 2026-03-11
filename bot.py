@@ -67,6 +67,7 @@ def points_keyboard(user_id: int, username: str):
         name_short = (p.get("name") or "Без названия")[:28]
         btn_text = f"#{p['id']} {name_short}"
         kb.append([InlineKeyboardButton(text=btn_text, callback_data=f"edit_{p['id']}")])
+        kb.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")])
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def edit_field_keyboard(point_id: int):
@@ -188,6 +189,15 @@ async def cb_edit_choose(callback: CallbackQuery, state: FSMContext):
 @dp.callback_query(F.data == "no_points")
 async def cb_no_points(callback: CallbackQuery):
     await callback.answer("У вас пока нет добавленных точек.", show_alert=True)
+
+@dp.callback_query(F.data == "back_to_main")
+async def cb_back_to_main(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(PointForm.choosing_action)
+    await callback.message.edit_text(
+        "Добавить новую точку или изменить старую?",
+        reply_markup=main_keyboard()
+    )
+    await callback.answer()
 
 @dp.callback_query(F.data.startswith("edit_"))
 async def cb_edit_select(callback: CallbackQuery, state: FSMContext):
@@ -375,4 +385,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
