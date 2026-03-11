@@ -57,7 +57,7 @@ def skip_keyboard(cb_data: str = "skip_comment"):
 
 def points_keyboard(user_id: int, username: str):
     """Показывает точки текущего пользователя — по owner_id или по updated_by."""
-    points = get_points_by_user(user_id, username)
+    points = get_points_by_user(username)
     if not points:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="У вас пока нет точек", callback_data="no_points")]
@@ -375,3 +375,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
