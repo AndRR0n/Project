@@ -6,8 +6,6 @@ import webbrowser
 from database import init_db, get_all_points, upsert_point, delete_point
 
 app = Flask(__name__)
-
-# Инициализация базы при старте
 init_db()
 
 
@@ -19,38 +17,36 @@ def index():
 
 @app.route("/update", methods=["POST"])
 def update_field():
-    data = request.json
+    data     = request.json
     point_id = int(data["id"])
-    field = data["field"]
-    value = data["value"].strip()
+    field    = data["field"]
+    value    = data["value"].strip()
 
-    allowed_fields = ["name", "address", "phone", "status", "comment"]
+    # Добавили "updated_by" в список разрешённых полей
+    allowed_fields = ["name", "address", "phone", "status", "comment", "updated_by"]
     if field not in allowed_fields:
         return jsonify({"status": "error", "message": "Недопустимое поле"}), 400
 
-    # Загружаем текущую запись
     points = get_all_points()
-    point = next((p for p in points if p["id"] == point_id), None)
+    point  = next((p for p in points if p["id"] == point_id), None)
     if not point:
         return jsonify({"status": "error", "message": "Точка не найдена"}), 404
 
-    # Обновляем только изменённое поле
     point[field] = value
     upsert_point(point)
-
     return jsonify({"status": "ok"})
 
 
 @app.route("/add", methods=["POST"])
 def add_point():
-    data = request.json
+    data  = request.json
     point = {
-        "name": (data.get("name") or "Новая точка").strip(),
-        "address": (data.get("address") or "").strip(),
-        "phone": (data.get("phone") or "").strip(),
-        "status": (data.get("status") or "в проработке").strip().lower(),
-        "comment": (data.get("comment") or "").strip(),
-        "updated_by": data.get("updated_by", "web")
+        "name":       (data.get("name") or "Новая точка").strip(),
+        "address":    (data.get("address") or "").strip(),
+        "phone":      (data.get("phone") or "").strip(),
+        "status":     (data.get("status") or "в проработке").strip().lower(),
+        "comment":    (data.get("comment") or "").strip(),
+        "updated_by": (data.get("updated_by") or "web").strip(),  # берём из формы
     }
     upsert_point(point)
     return jsonify({"status": "ok"})
@@ -58,7 +54,7 @@ def add_point():
 
 @app.route("/delete", methods=["POST"])
 def delete():
-    data = request.json
+    data     = request.json
     point_id = int(data["id"])
     delete_point(point_id)
     return jsonify({"status": "ok"})
@@ -71,6 +67,7 @@ def open_browser():
 
 if __name__ == "__main__":
     threading.Thread(target=open_browser, daemon=True).start()
-    import os
+
+import os
 port = int(os.environ.get("PORT", 5000))
-app.run(host="0.0.0.0", port=port, debug=False)   # debug=False в проде обязательно
+app.run(host="0.0.0.0", port=port, debug=False)
