@@ -9,16 +9,21 @@ def init_db():
     cur = conn.cursor()
     cur.execute('''
         CREATE TABLE IF NOT EXISTS points (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            address TEXT,
-            phone TEXT,
-            status TEXT DEFAULT 'в проработке',
-            comment TEXT,
-            updated TEXT,
-            updated_by TEXT
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL,
+            address    TEXT,
+            phone      TEXT,
+            status     TEXT DEFAULT 'в проработке',
+            comment    TEXT,
+            updated    TEXT,
+            updated_by TEXT,
+            owner_id   INTEGER
         )
     ''')
+    # Миграция: добавляем owner_id если таблица уже существует без него
+    existing_cols = {row[1] for row in cur.execute("PRAGMA table_info(points)")}
+    if "owner_id" not in existing_cols:
+        cur.execute("ALTER TABLE points ADD COLUMN owner_id INTEGER")
     conn.commit()
     conn.close()
 
@@ -33,38 +38,59 @@ def get_all_points():
     return [dict(row) for row in rows]
 
 
+def get_points_by_user(user_id: int):
+    """Возвращает только точки, добавленные пользователем с данным Telegram user_id."""
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM points WHERE owner_id = ? ORDER BY id", (user_id,))
+    rows = cur.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
 def upsert_point(point: dict):
-    """Создаёт новую запись или обновляет существующую по id"""
+    """Создаёт новую запись или обновляет существующую по id."""
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
+    now = datetime.now().isoformat()
 
     if "id" in point and point["id"]:
         cur.execute('''
             UPDATE points
-            SET name = ?, address = ?, phone = ?, status = ?, comment = ?, updated = ?, updated_by = ?
+            SET name       = ?,
+                address    = ?,
+                phone      = ?,
+                status     = ?,
+                comment    = ?,
+                updated    = ?,
+                updated_by = ?,
+                owner_id   = COALESCE(owner_id, ?)
             WHERE id = ?
         ''', (
-            point["name"],
+            point.get("name"),
             point.get("address"),
             point.get("phone"),
             point.get("status", "в проработке"),
             point.get("comment"),
-            datetime.now().isoformat(),
+            now,
             point.get("updated_by", "system"),
+            point.get("owner_id"),   # COALESCE — не перезаписывает если уже есть
             point["id"]
         ))
     else:
         cur.execute('''
-            INSERT INTO points (name, address, phone, status, comment, updated, updated_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO points (name, address, phone, status, comment, updated, updated_by, owner_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
-            point["name"],
+            point.get("name"),
             point.get("address"),
             point.get("phone"),
             point.get("status", "в проработке"),
             point.get("comment"),
-            datetime.now().isoformat(),
-            point.get("updated_by", "system")
+            now,
+            point.get("updated_by", "system"),
+            point.get("owner_id"),
         ))
 
     conn.commit()
