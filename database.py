@@ -48,8 +48,8 @@ def get_points_by_user(user_id: int, username: str):
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
-        "SELECT * FROM points WHERE owner_id = ? OR updated_by = ? ORDER BY id",
-        (user_id, username)
+        "SELECT * FROM points WHERE updated_by = ? ORDER BY id",
+        (username)
     )
     rows = cur.fetchall()
     conn.close()
@@ -110,5 +110,6 @@ def delete_point(point_id: int):
     cur.execute("DELETE FROM points WHERE id = ?", (point_id,))
     conn.commit()
     conn.close()
+
 
 
