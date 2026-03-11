@@ -25,11 +25,12 @@ class PointForm(StatesGroup):
     comment = State()
     # Редактирование существующей точки
     edit_choosing_field = State()
-    edit_name    = State()
-    edit_address = State()
-    edit_phone   = State()
-    edit_status  = State()
-    edit_comment = State()
+    edit_name       = State()
+    edit_address    = State()
+    edit_phone      = State()
+    edit_status     = State()
+    edit_comment    = State()
+    edit_owner      = State()   # редактирование поля "Ответственный"
 
 
 # ── Клавиатуры ──────────────────────────────────
@@ -54,9 +55,9 @@ def skip_keyboard(cb_data: str = "skip_comment"):
         [InlineKeyboardButton(text="Пропустить →", callback_data=cb_data)]
     ])
 
-def points_keyboard(user_id: int):
-    """Показывает только точки, добавленные текущим пользователем."""
-    points = get_points_by_user(user_id)
+def points_keyboard(user_id: int, username: str):
+    """Показывает точки текущего пользователя — по owner_id или по updated_by."""
+    points = get_points_by_user(user_id, username)
     if not points:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="У вас пока нет точек", callback_data="no_points")]
@@ -71,12 +72,13 @@ def points_keyboard(user_id: int):
 def edit_field_keyboard(point_id: int):
     """Меню выбора поля для редактирования."""
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Название",      callback_data=f"field_name_{point_id}")],
-        [InlineKeyboardButton(text="📍 Адрес",         callback_data=f"field_address_{point_id}")],
-        [InlineKeyboardButton(text="📞 Телефон",       callback_data=f"field_phone_{point_id}")],
-        [InlineKeyboardButton(text="🔄 Статус",        callback_data=f"field_status_{point_id}")],
-        [InlineKeyboardButton(text="💬 Комментарий",   callback_data=f"field_comment_{point_id}")],
-        [InlineKeyboardButton(text="✅ Сохранить всё", callback_data=f"field_done_{point_id}")],
+        [InlineKeyboardButton(text="📝 Название",        callback_data=f"field_name_{point_id}")],
+        [InlineKeyboardButton(text="📍 Адрес",           callback_data=f"field_address_{point_id}")],
+        [InlineKeyboardButton(text="📞 Телефон",         callback_data=f"field_phone_{point_id}")],
+        [InlineKeyboardButton(text="🔄 Статус",          callback_data=f"field_status_{point_id}")],
+        [InlineKeyboardButton(text="💬 Комментарий",     callback_data=f"field_comment_{point_id}")],
+        [InlineKeyboardButton(text="👤 Ответственный",   callback_data=f"field_owner_{point_id}")],
+        [InlineKeyboardButton(text="✅ Сохранить всё",   callback_data=f"field_done_{point_id}")],
     ])
 
 
@@ -177,7 +179,9 @@ async def save_new_and_finish(state: FSMContext, user: types.User, msg):
 
 @dp.callback_query(F.data == "edit")
 async def cb_edit_choose(callback: CallbackQuery, state: FSMContext):
-    kb = points_keyboard(callback.from_user.id)
+    user = callback.from_user
+    username = f"@{user.username}" if user.username else f"ID{user.id}"
+    kb = points_keyboard(user.id, username)
     await callback.message.edit_text("Выберите точку для редактирования:", reply_markup=kb)
     await callback.answer()
 
@@ -200,12 +204,13 @@ async def cb_edit_select(callback: CallbackQuery, state: FSMContext):
 
     # Сохраняем актуальные данные точки в state как начальные значения
     await state.update_data(
-        point_id = point_id,
-        name     = point.get("name"),
-        address  = point.get("address"),
-        phone    = point.get("phone"),
-        status   = point.get("status"),
-        comment  = point.get("comment"),
+        point_id   = point_id,
+        name       = point.get("name"),
+        address    = point.get("address"),
+        phone      = point.get("phone"),
+        status     = point.get("status"),
+        comment    = point.get("comment"),
+        updated_by = point.get("updated_by"),
     )
 
     info = (
@@ -214,7 +219,8 @@ async def cb_edit_select(callback: CallbackQuery, state: FSMContext):
         f"Адрес:       {point.get('address', '—')}\n"
         f"Телефон:     {point.get('phone', '—')}\n"
         f"Статус:      {point.get('status', '—')}\n"
-        f"Комментарий: {point.get('comment', '—')}\n\n"
+        f"Комментарий: {point.get('comment', '—')}\n"
+        f"Ответственный: {point.get('updated_by', '—')}\n\n"
         "Что хотите изменить?"
     )
     await callback.message.edit_text(info, reply_markup=edit_field_keyboard(point_id))
@@ -263,6 +269,13 @@ async def cb_field_select(callback: CallbackQuery, state: FSMContext):
         )
         await state.set_state(PointForm.edit_comment)
 
+    elif field == "owner":
+        await callback.message.edit_text(
+            f"Текущий ответственный: {current}\n\n"
+            "Введите новый логин (например @username)\nили «-» чтобы очистить:"
+        )
+        await state.set_state(PointForm.edit_owner)
+
     await callback.answer()
 
 
@@ -297,6 +310,12 @@ async def edit_comment(message: Message, state: FSMContext):
     await state.update_data(comment=None if text == "-" else text)
     await _back_to_field_menu(state, message)
 
+@dp.message(PointForm.edit_owner)
+async def edit_owner(message: Message, state: FSMContext):
+    text = message.text.strip()
+    await state.update_data(updated_by=None if text == "-" else text)
+    await _back_to_field_menu(state, message)
+
 
 async def _back_to_field_menu(state: FSMContext, msg, is_callback: bool = False):
     """Возвращает пользователя в меню выбора поля после редактирования одного поля."""
@@ -305,11 +324,12 @@ async def _back_to_field_menu(state: FSMContext, msg, is_callback: bool = False)
 
     info = (
         f"📌 Редактируем точку #{point_id}\n\n"
-        f"Название:    {data.get('name', '—') or '—'}\n"
-        f"Адрес:       {data.get('address', '—') or '—'}\n"
-        f"Телефон:     {data.get('phone', '—') or '—'}\n"
-        f"Статус:      {data.get('status', '—') or '—'}\n"
-        f"Комментарий: {data.get('comment', '—') or '—'}\n\n"
+        f"Название:      {data.get('name', '—') or '—'}\n"
+        f"Адрес:         {data.get('address', '—') or '—'}\n"
+        f"Телефон:       {data.get('phone', '—') or '—'}\n"
+        f"Статус:        {data.get('status', '—') or '—'}\n"
+        f"Комментарий:   {data.get('comment', '—') or '—'}\n"
+        f"Ответственный: {data.get('updated_by', '—') or '—'}\n\n"
         "Что ещё изменить? Или нажмите «Сохранить всё»."
     )
     kb = edit_field_keyboard(point_id)
@@ -324,7 +344,11 @@ async def _back_to_field_menu(state: FSMContext, msg, is_callback: bool = False)
 
 async def _save_edit_and_finish(state: FSMContext, user: types.User, msg):
     data     = await state.get_data()
-    username = f"@{user.username}" if user.username else f"ID{user.id}"
+    # Берём ответственного из state (мог быть изменён вручную),
+    # только если поле пустое — подставляем текущего пользователя
+    updated_by = data.get("updated_by") or (
+        f"@{user.username}" if user.username else f"ID{user.id}"
+    )
     point = {
         "id":         data["point_id"],
         "name":       data.get("name"),
@@ -332,7 +356,7 @@ async def _save_edit_and_finish(state: FSMContext, user: types.User, msg):
         "phone":      data.get("phone"),
         "status":     data.get("status"),
         "comment":    data.get("comment"),
-        "updated_by": username,
+        "updated_by": updated_by,
         "owner_id":   user.id,
     }
     upsert_point(point)
