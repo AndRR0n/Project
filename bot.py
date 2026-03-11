@@ -56,7 +56,6 @@ def skip_keyboard(cb_data: str = "skip_comment"):
     ])
 
 def points_keyboard(user_id: int, username: str):
-    """Показывает точки текущего пользователя — по owner_id или по updated_by."""
     points = get_points_by_user(username)
     if not points:
         return InlineKeyboardMarkup(inline_keyboard=[
@@ -67,7 +66,7 @@ def points_keyboard(user_id: int, username: str):
         name_short = (p.get("name") or "Без названия")[:28]
         btn_text = f"#{p['id']} {name_short}"
         kb.append([InlineKeyboardButton(text=btn_text, callback_data=f"edit_{p['id']}")])
-        kb.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")])
+    kb.append([InlineKeyboardButton(text="🔙 Назад", callback_data="back_to_main")])  # ← сюда
     return InlineKeyboardMarkup(inline_keyboard=kb)
 
 def edit_field_keyboard(point_id: int):
@@ -385,5 +384,6 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
 
 
