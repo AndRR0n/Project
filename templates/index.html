@@ -13,10 +13,12 @@
     .status-впроработке { background: #fff3cd; }
     .status-закрыта     { background: #ffecec; }
     .status-неработает  { background: #ffecec; }
-    input, select { width: 100%; box-sizing: border-box; padding: 4px; }
+    input, select, textarea { width: 100%; box-sizing: border-box; padding: 4px; }
     button { padding: 4px 8px; margin: 2px; cursor: pointer; }
     .add-form { margin: 20px 0; padding: 12px; border: 1px solid #ccc; background: #f9f9f9; }
     .add-form input, .add-form select, .add-form textarea { margin-bottom: 8px; }
+    /* Подсветка поля "Кем" при сохранении */
+    .saved { outline: 2px solid #4caf50; transition: outline 0.5s; }
   </style>
 </head>
 <body>
@@ -26,16 +28,17 @@
 <!-- Форма добавления -->
 <div class="add-form">
   <h3>Добавить новую точку</h3>
-  <input type="text" id="new-name"     placeholder="Название точки" required>
-  <input type="text" id="new-address"  placeholder="Адрес">
-  <input type="tel"  id="new-phone"    placeholder="Номер телефона (+7 ... или 8...)">
+  <input type="text" id="new-name"       placeholder="Название точки" required>
+  <input type="text" id="new-address"    placeholder="Адрес">
+  <input type="tel"  id="new-phone"      placeholder="Номер телефона (+7 ... или 8...)">
   <select id="new-status">
     <option value="в проработке">в проработке</option>
     <option value="работает">работает</option>
     <option value="закрыта">закрыта</option>
     <option value="не работает">не работает</option>
   </select>
-  <textarea id="new-comment" placeholder="Комментарий / заметки" rows="2"></textarea>
+  <textarea id="new-comment"    placeholder="Комментарий / заметки" rows="2"></textarea>
+  <input type="text" id="new-updated_by" placeholder="Ответственный (кем)">
   <button onclick="addPoint()">Добавить</button>
 </div>
 
@@ -46,7 +49,7 @@
       <th>ID</th>
       <th>Название</th>
       <th>Адрес</th>
-      <th>Телефон</th>              <!-- ← новая колонка -->
+      <th>Телефон</th>
       <th>Статус</th>
       <th>Комментарий</th>
       <th>Обновлено</th>
@@ -58,9 +61,9 @@
     {% for p in points %}
     <tr data-id="{{ p.id }}" class="status-{{ p.status | replace(' ', '') }}">
       <td>{{ p.id }}</td>
-      <td><input type="text" value="{{ p.name }}"     onchange="updateField({{ p.id }}, 'name',    this.value)"></td>
-      <td><input type="text" value="{{ p.address }}"  onchange="updateField({{ p.id }}, 'address', this.value)"></td>
-      <td><input type="tel"  value="{{ p.phone or '' }}" onchange="updateField({{ p.id }}, 'phone',   this.value)"></td>
+      <td><input type="text" value="{{ p.name }}"        onchange="updateField({{ p.id }}, 'name',       this.value)"></td>
+      <td><input type="text" value="{{ p.address }}"     onchange="updateField({{ p.id }}, 'address',    this.value)"></td>
+      <td><input type="tel"  value="{{ p.phone or '' }}" onchange="updateField({{ p.id }}, 'phone',      this.value)"></td>
       <td>
         <select onchange="updateField({{ p.id }}, 'status', this.value)">
           <option value="работает"     {% if p.status == 'работает'     %}selected{% endif %}>работает</option>
@@ -71,7 +74,13 @@
       </td>
       <td><textarea rows="1" onchange="updateField({{ p.id }}, 'comment', this.value)">{{ p.comment or '' }}</textarea></td>
       <td>{{ p.updated }}</td>
-      <td>{{ p.updated_by }}</td>
+      <td>
+        <!-- Поле "Кем" — редактируемое, сохраняется по потере фокуса -->
+        <input type="text"
+               value="{{ p.updated_by or '' }}"
+               placeholder="не указан"
+               onchange="updateField({{ p.id }}, 'updated_by', this.value, this)">
+      </td>
       <td>
         <button onclick="deletePoint({{ p.id }})" style="background:#ff4d4d; color:white; border:none; padding:4px 8px; cursor:pointer;">
           Удалить
@@ -83,7 +92,7 @@
 </table>
 
 <script>
-  async function updateField(id, field, value) {
+  async function updateField(id, field, value, el) {
     if (value === undefined || value === null) return;
 
     const res = await fetch("/update", {
@@ -95,59 +104,56 @@
     if (!res.ok) {
       alert("Ошибка сохранения");
       console.error(await res.text());
+    } else if (el) {
+      // Краткая зелёная подсветка для подтверждения сохранения
+      el.classList.add("saved");
+      setTimeout(() => el.classList.remove("saved"), 1000);
     }
-    // можно добавить визуальную индикацию успеха, если нужно
   }
 
   async function addPoint() {
-  const name    = document.getElementById("new-name").value.trim();
-  const address = document.getElementById("new-address").value.trim();
-  const phone   = document.getElementById("new-phone").value.trim();     // ← добавили
-  const status  = document.getElementById("new-status").value;
-  const comment = document.getElementById("new-comment").value.trim();
+    const name       = document.getElementById("new-name").value.trim();
+    const address    = document.getElementById("new-address").value.trim();
+    const phone      = document.getElementById("new-phone").value.trim();
+    const status     = document.getElementById("new-status").value;
+    const comment    = document.getElementById("new-comment").value.trim();
+    const updated_by = document.getElementById("new-updated_by").value.trim();
 
-  if (!name) {
-    alert("Введите хотя бы название точки");
-    return;
-  }
-
-  const res = await fetch("/add", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, address, phone, status, comment })      // ← добавили phone
-  });
-
-  if (res.ok) {
-    location.reload();
-  } else {
-    alert("Ошибка добавления");
-  }
-}
-  
-  async function deletePoint(id) {
-  if (!confirm(`Удалить точку #${id} без возможности восстановления?`)) {
-    return;
-  }
-
-  const res = await fetch("/delete", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id })
-  });
-
-  if (res.ok) {
-    // Удаляем строку из DOM без перезагрузки страницы
-    const row = document.querySelector(`tr[data-id="${id}"]`);
-    if (row) {
-      row.remove();
+    if (!name) {
+      alert("Введите хотя бы название точки");
+      return;
     }
-    // Можно добавить уведомление, например:
-    // alert("Точка удалена");
-  } else {
-    alert("Ошибка удаления");
-    console.error(await res.text());
+
+    const res = await fetch("/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, address, phone, status, comment, updated_by })
+    });
+
+    if (res.ok) {
+      location.reload();
+    } else {
+      alert("Ошибка добавления");
+    }
   }
-}
+
+  async function deletePoint(id) {
+    if (!confirm(`Удалить точку #${id} без возможности восстановления?`)) return;
+
+    const res = await fetch("/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id })
+    });
+
+    if (res.ok) {
+      const row = document.querySelector(`tr[data-id="${id}"]`);
+      if (row) row.remove();
+    } else {
+      alert("Ошибка удаления");
+      console.error(await res.text());
+    }
+  }
 </script>
 
 </body>
