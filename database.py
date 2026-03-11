@@ -38,18 +38,13 @@ def get_all_points():
     return [dict(row) for row in rows]
 
 
-def get_points_by_user(user_id: int, username: str):
-    """
-    Возвращает точки пользователя — ищет по двум условиям:
-    1. owner_id совпадает (точки добавленные через бота)
-    2. updated_by совпадает (точки назначенные вручную через веб-интерфейс)
-    """
+def get_points_by_user(username: str):
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
         "SELECT * FROM points WHERE updated_by = ? ORDER BY id",
-        (username)
+        (username,)
     )
     rows = cur.fetchall()
     conn.close()
@@ -110,6 +105,7 @@ def delete_point(point_id: int):
     cur.execute("DELETE FROM points WHERE id = ?", (point_id,))
     conn.commit()
     conn.close()
+
 
 
 
