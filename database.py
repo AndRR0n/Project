@@ -38,12 +38,19 @@ def get_all_points():
     return [dict(row) for row in rows]
 
 
-def get_points_by_user(user_id: int):
-    """Возвращает только точки, добавленные пользователем с данным Telegram user_id."""
+def get_points_by_user(user_id: int, username: str):
+    """
+    Возвращает точки пользователя — ищет по двум условиям:
+    1. owner_id совпадает (точки добавленные через бота)
+    2. updated_by совпадает (точки назначенные вручную через веб-интерфейс)
+    """
     conn = sqlite3.connect(DB_FILE)
     conn.row_factory = sqlite3.Row
     cur = conn.cursor()
-    cur.execute("SELECT * FROM points WHERE owner_id = ? ORDER BY id", (user_id,))
+    cur.execute(
+        "SELECT * FROM points WHERE owner_id = ? OR updated_by = ? ORDER BY id",
+        (user_id, username)
+    )
     rows = cur.fetchall()
     conn.close()
     return [dict(row) for row in rows]
@@ -75,7 +82,7 @@ def upsert_point(point: dict):
             point.get("comment"),
             now,
             point.get("updated_by", "system"),
-            point.get("owner_id"),   # COALESCE — не перезаписывает если уже есть
+            point.get("owner_id"),
             point["id"]
         ))
     else:
